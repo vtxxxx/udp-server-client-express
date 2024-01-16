@@ -1,48 +1,43 @@
-const express = require('express')
-const http = require('http')
-const socketIO = require('socket.io')
+const dgram = require('dgram')
 const fs = require('fs')
 
-const app = express();
-const server = http.createServer(app)
-const io = socketIO(server)
+const server = dgram.createSocket('udp4')
+const PORT = 1997
 
-const PORT = 2000
-
-const filesDirectory = './files'  // Diretório onde os arquivos estão armazenados.
+const filesDirectory = './files' // Diretório onde os arquivos estão armazenados.
 const password = 'mypassword' // Defina uma senha segura para o envio de arquivos.
 
-app.use(express.static('public'))
+server.on('message', (msg, rinfo) => {
+  const data = JSON.parse(msg.toString())
 
-app.get('/files', (req, res) => {
-  // Endpoint para obter a lista de arquivos disponíveis.
-  const fileList = fs.readdirSync(filesDirectory)
-  res.json({ files: fileList })
-});
+  switch (data.type) {
+    case 'getFilesList':
+      // Endpoint para obter a lista de arquivos disponíveis.
+      const fileList = fs.readdirSync(filesDirectory)
+      const response = JSON.stringify({ type: 'fileList', files: fileList })
+      server.send(response, rinfo.port, rinfo.address)
+      break
 
-io.on('connection', (socket) => {
-  console.log(`Cliente conectado: ${socket.id}`)
+    case 'uploadFile':
+      // Verifica se a senha fornecida pelo cliente está correta.
+      if (data.password === password) {
+        const filePath = `${filesDirectory}/${data.fileName}`
 
-  // Envia a lista de arquivos para o cliente quando ele se conecta.
-  socket.emit('fileList', { files: fs.readdirSync(filesDirectory) })
+        // Salva o arquivo no servidor.
+        fs.writeFileSync(filePath, Buffer.from(data.fileData, 'base64'))
 
-  socket.on('uploadFile', ({ fileName, fileData, clientPassword }) => {
-    // Verifica se a senha fornecida pelo cliente está correta.
-    if (clientPassword === password) {
-      const filePath = `${filesDirectory}/${fileName}`
-      
-      // Salva o arquivo no servidor.
-      fs.writeFileSync(filePath, fileData, 'base64')
+        console.log(`Arquivo recebido: ${data.fileName}`)
+        const successResponse = JSON.stringify({ type: 'uploadSuccess', message: 'Arquivo recebido com sucesso!' })
+        server.send(successResponse, rinfo.port, rinfo.address)
+      } else {
+        // Senha incorreta.
+        const errorResponse = JSON.stringify({ type: 'uploadError', message: 'Senha incorreta. Upload não autorizado.' })
+        server.send(errorResponse, rinfo.port, rinfo.address)
+      }
+      break
+  }
+})
 
-      console.log(`Arquivo recebido: ${fileName}`)
-      socket.emit('uploadSuccess', { message: 'Arquivo recebido com sucesso!' })
-    } else {
-      // Senha incorreta.
-      socket.emit('uploadError', { message: 'Senha incorreta. Upload não autorizado.' })
-    }
-  });
-});
-
-server.listen(PORT, () => {
+server.bind(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`)
-});
+})

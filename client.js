@@ -1,41 +1,43 @@
-const io = require('socket.io-client')
+const dgram = require('dgram')
 const fs = require('fs')
 
-const serverURL = 'http://localhost:2000' // Substitua pela URL do servidor local.
+const serverAddress = 'localhost'
+const serverPort = 1997
 const clientPassword = 'mypassword' // A mesma senha definida no servidor.
 
-const socket = io(serverURL)
+const client = dgram.createSocket('udp4')
 
-socket.on('connect', () => {
-  console.log(`Conectado ao servidor: ${socket.id}`)
+// Solicita a lista de arquivos ao se conectar.
+client.send(JSON.stringify({ type: 'getFilesList' }), serverPort, serverAddress)
 
-  // Solicita a lista de arquivos ao se conectar.
-  socket.emit('getFilesList')
+client.on('message', (msg) => {
+  const data = JSON.parse(msg.toString())
 
-  // Lógica para lidar com a lista de arquivos recebida do servidor.
-  socket.on('fileList', ({ files }) => {
-    console.log('Lista de Arquivos:', files)
-    // Aqui você pode exibir os arquivos disponíveis na interface do usuário.
-  })
+  switch (data.type) {
+    case 'fileList':
+      console.log('Lista de Arquivos:', data.files)
+      // Aqui você pode exibir os arquivos disponíveis na interface do usuário.
+      break
 
-  // Exemplo de upload de arquivo para o servidor.
-  const filePath = './files/exemplo.txt'
-  const fileName = 'exemplo.txt'
-  const fileData = fs.readFileSync(filePath, 'base64')  
+    case 'uploadSuccess':
+      console.log(`Upload bem-sucedido: ${data.message}`)
+      break
 
-  // Evento de upload para o servidor.
-  socket.emit('uploadFile', { fileName, fileData, clientPassword })
-
-  // Lógica para lidar com a resposta do servidor após o upload.
-  socket.on('uploadSuccess', ({ message }) => {
-    console.log(`Upload bem-sucedido: ${message}`)
-  })
-
-  socket.on('uploadError', ({ message }) => {
-    console.error(`Erro no upload: ${message}`)
-  })
+    case 'uploadError':
+      console.error(`Erro no upload: ${data.message}`)
+      break
+  }
 })
 
-socket.on('disconnect', () => {
+// Exemplo de upload de arquivo para o servidor.
+const filePath = './files/exemplo.txt'
+const fileName = 'exemplo.txt'
+const fileData = fs.readFileSync(filePath).toString('base64')
+
+// Evento de upload para o servidor.
+client.send(JSON.stringify({ type: 'uploadFile', fileName, fileData, password: clientPassword }), serverPort, serverAddress)
+
+// Lógica para lidar com a resposta do servidor após o upload.
+client.on('close', () => {
   console.log('Desconectado do servidor.')
 })
