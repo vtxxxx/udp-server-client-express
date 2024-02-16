@@ -1,15 +1,17 @@
 import { specifyCommand } from "@/app/logic/helpers";
 import dgram from "dgram";
+
 const client = dgram.createSocket("udp4");
-const serverAddress = "localhost";
-const serverPort = 2000;
+
+const SERVER_PORT = Number(process.env.SERVER_PORT ?? 1999);
+const SERVER_ADDRESS = process.env.SERVER_ADDRESS;
 
 function listFiles() {
-  return new Promise<BufferSource>((resolve, reject) => {
+  return new Promise<Buffer>((resolve, reject) => {
     const command = specifyCommand("LIST");
 
     // Create a one-time listener for the response
-    const handleMessage = (msg: BufferSource, rinfo: any) => {
+    const handleMessage = (msg: Buffer, rinfo: any) => {
       client.removeListener("message", handleMessage); // Remove listener to avoid memory leak
       resolve(msg);
     };
@@ -20,8 +22,8 @@ function listFiles() {
       command,
       0,
       command.length,
-      serverPort,
-      serverAddress,
+      SERVER_PORT,
+      SERVER_ADDRESS,
       (err) => {
         if (err) {
           client.removeListener("message", handleMessage); // Ensure listener is removed on error
@@ -35,8 +37,8 @@ function listFiles() {
 
 export async function GET() {
   try {
-    const message = await listFiles();
-    return new Response(JSON.stringify({ message: message.toString() }), {
+    const files = await listFiles();
+    return new Response(JSON.stringify({ data: files.toString() }), {
       status: 200,
       headers: {
         "Content-Type": "application/json",

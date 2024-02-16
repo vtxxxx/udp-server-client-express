@@ -10,7 +10,8 @@ if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
 const WINDOW_SIZE = 4;
 const PACKET_SIZE = 1460;
 const TIMEOUT = 1000; // in milliseconds
-const PASSWORD = "your_password_here"; // Define a password for upload authentication
+const PASSWORD = "12345678"; // Define a password for upload authentication
+const USER = "admin"; // Define a password for upload authentication
 
 let windowStart = 0;
 let windowEnd = WINDOW_SIZE - 1;
@@ -87,9 +88,16 @@ server.on("message", (msg, rinfo) => {
 function handleCommand(command, rinfo) {
   const [cmd, payload] = command.split("|");
   windowStart = 0;
-  windowEnd = WINDOW_SIZE - 1
+  windowEnd = WINDOW_SIZE - 1;
 
   switch (cmd) {
+    case "LOGIN":
+      const [username, password] = payload.split(":");
+      const message =
+        username === USER && password === PASSWORD ? "Success" : "Failure";
+      const packet = Buffer.from(message, "utf8");
+      server.send(packet, 0, packet.length, rinfo.port, rinfo.address);
+      break;
     case "LIST":
       fs.readdir(FILES_DIR, (err, files) => {
         if (err) {
